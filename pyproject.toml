@@ -1,0 +1,28 @@
+[project]
+name = "fault-mesh"
+version = "0.1.0"
+description = "Tools for generating depth contour meshes from fault traces."
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "geopandas (>=1.1.1,<2.0.0)",
+    "shapely (>=2.1.2,<3.0.0)"
+]
+
+packages = [
+    { include = "fault_mesh" },
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.0,<10.0.0)",
+    "flake8 (>=7.3.0,<8.0.0)",
+    "mypy (>=1.18.2,<2.0.0)"
+]
