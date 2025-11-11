@@ -5,3 +5,4 @@ Modules:
     * faults - Main scripts for projecting surface traces to depth
     * utilities - Functions for reading and writing files and
 """
+__version__ == "0.1.0"
