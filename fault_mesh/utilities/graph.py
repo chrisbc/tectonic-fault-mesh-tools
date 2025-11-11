@@ -6,6 +6,7 @@ Functions:
     - connected_nodes: Finds all connected components in a graph created from node lists
     - suggest_combined_name: Suggests a combined name for a set of connected nodes based on their names
 """
+
 from collections import Counter
 from typing import List
 
@@ -42,10 +43,10 @@ def connected_nodes(node_list: List[List[str]]):
 
 def suggest_combined_name(connected_node_set: list):
     """Suggest a combined name for a set of connected nodes.
-    
+
     This function analyzes a set of connected node names and attempts to find
     a meaningful combined name based on common elements or patterns in the names.
-    
+
     :param connected_node_set: A set of node names that are connected in a graph
     :type connected_node_set: list
     :return: A suggested name for the combined nodes
@@ -63,7 +64,9 @@ def suggest_combined_name(connected_node_set: list):
                     ordered_example = item
 
             if ordered_example is not None:
-                ordered_name = " ".join([x for x in ordered_example.split() if x in intersections])
+                ordered_name = " ".join(
+                    [x for x in ordered_example.split() if x in intersections]
+                )
                 out_name = ordered_name + " combined"
 
             else:

@@ -1,11 +1,15 @@
-import geopandas as gpd
-from typing import Union
-from shapely.geometry import Polygon, LineString, MultiLineString, MultiPolygon, Point, MultiPoint
 import os
+from typing import Union
+
+import geopandas as gpd
 import pandas as pd
+from shapely.geometry import (LineString, MultiLineString, MultiPoint,
+                              MultiPolygon, Point, Polygon)
 
 
-def geopandas_polygon_to_gmt(gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_file: str, matlab: bool = False):
+def geopandas_polygon_to_gmt(
+    gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_file: str, matlab: bool = False
+):
     """
     :param gdf: Geodataframe with polygon or multipolygon geometry
     :param out_file: normally has a ".gmt" ending
@@ -42,7 +46,9 @@ def geopandas_polygon_to_gmt(gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_fi
     return
 
 
-def geopandas_linestring_to_gmt(gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_file: str, matlab: bool = False):
+def geopandas_linestring_to_gmt(
+    gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_file: str, matlab: bool = False
+):
     """
 
     :param gdf: Geodataframe or geoseries with polygon or multipolygon geometry
@@ -106,7 +112,9 @@ def geopandas_points_to_gmt(gdf: Union[gpd.GeoDataFrame, gpd.GeoSeries], out_fil
     return
 
 
-def shp_to_gmt(shapefile: str, out_file: str, in_epsg: int = None, out_epsg: int = None):
+def shp_to_gmt(
+    shapefile: str, out_file: str, in_epsg: int = None, out_epsg: int = None
+):
     """
 
     :param shapefile:
@@ -117,7 +125,9 @@ def shp_to_gmt(shapefile: str, out_file: str, in_epsg: int = None, out_epsg: int
     """
     assert os.path.exists(shapefile)
     if in_epsg is not None:
-        gdf = gpd.GeoDataFrame.from_file(shapefile, crs={"init": "{:d}".format(in_epsg)})
+        gdf = gpd.GeoDataFrame.from_file(
+            shapefile, crs={"init": "{:d}".format(in_epsg)}
+        )
     else:
         gdf = gpd.GeoDataFrame.from_file(shapefile)
 
@@ -137,13 +147,21 @@ def shp_to_gmt(shapefile: str, out_file: str, in_epsg: int = None, out_epsg: int
     elif any([isinstance(gdf.geometry[0], x) for x in (Polygon, MultiPolygon)]):
         geopandas_polygon_to_gmt(out_gdf, out_file)
     else:
-        raise TypeError("shapefile must contain (only) one of points, lines or polygons")
+        raise TypeError(
+            "shapefile must contain (only) one of points, lines or polygons"
+        )
 
     return
 
 
-def reproject_csv(in_csv: str, out_csv: str = None, sep: str = None, in_epsg: int = 2193, out_epsg: int = 4326,
-                  header: int = None):
+def reproject_csv(
+    in_csv: str,
+    out_csv: str = None,
+    sep: str = None,
+    in_epsg: int = 2193,
+    out_epsg: int = 4326,
+    header: int = None,
+):
     """
 
     :param in_csv:
@@ -163,8 +181,10 @@ def reproject_csv(in_csv: str, out_csv: str = None, sep: str = None, in_epsg: in
 
     assert len(df.iloc[0]) > 2, "Expecting at least 2 columns (lon, lat)"
 
-    geom = gpd.GeoSeries([Point(xi, yi) for xi, yi in zip(df.iloc[:, 0], df.iloc[:, 1])],
-                         crs={"init": "epsg:{:d}".format(in_epsg)})
+    geom = gpd.GeoSeries(
+        [Point(xi, yi) for xi, yi in zip(df.iloc[:, 0], df.iloc[:, 1])],
+        crs={"init": "epsg:{:d}".format(in_epsg)},
+    )
     new_geom = geom.to_crs(epsg=out_epsg)
 
     df.iloc[:, 0] = new_geom.x
@@ -187,6 +207,3 @@ def reproject_csv(in_csv: str, out_csv: str = None, sep: str = None, in_epsg: in
 
     out_sep = sep if sep is not None else " "
     df.to_csv(out_name, sep=out_sep, header=header, index=None)
-
-
-

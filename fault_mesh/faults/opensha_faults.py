@@ -1,58 +1,89 @@
-from typing import Union, List
-import xml.etree.ElementTree as ElemTree
-from xml.dom import minidom
+import logging
 import os
+import xml.etree.ElementTree as ElemTree
+from typing import List, Union
+from xml.dom import minidom
 
 import geopandas as gpd
-import pandas as pd
 import numpy as np
-from shapely.geometry import LineString, Polygon, MultiPolygon, MultiLineString
-from shapely.ops import unary_union
+import pandas as pd
 from pyproj import Transformer
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
+from shapely.ops import unary_union
+
 # import warnings
 
-import logging
 
 # from src.eq_fault_geom.geomio.cfm_logger import CfmLogger
 
 transformer = Transformer.from_crs(2193, 4326, always_xy=True)
 transform_wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
 
-dip_direction_ranges = {"E": (45, 135), "NE": (0, 90), "N": (315, 45), "NW": (270, 360), "SW": (180, 270),
-                        "S": (135, 225), "SE": (90, 180), "W": (225, 315)}
-valid_dip_directions = list(dip_direction_ranges.keys()) + [None, "SUBVERTICAL AND VARIABLE"]
+dip_direction_ranges = {
+    "E": (45, 135),
+    "NE": (0, 90),
+    "N": (315, 45),
+    "NW": (270, 360),
+    "SW": (180, 270),
+    "S": (135, 225),
+    "SE": (90, 180),
+    "W": (225, 315),
+}
+valid_dip_directions = list(dip_direction_ranges.keys()) + [
+    None,
+    "SUBVERTICAL AND VARIABLE",
+]
 
-dominant_rake_ranges = {"reverse": (45, 135), "dextral": (135, 225), "sinistral": (315, 45), "normal": (225, 315)}
-secondary_rake_ranges = {"reverse": (0, 180), "dextral": (90, 270), "sinistral": (270, 90), "normal": (180, 360)}
-possible_rake_dirs = ['dextral', 'normal', 'reverse', 'sinistral', 'dextral and reverse', 'normal and dextral']
+dominant_rake_ranges = {
+    "reverse": (45, 135),
+    "dextral": (135, 225),
+    "sinistral": (315, 45),
+    "normal": (225, 315),
+}
+secondary_rake_ranges = {
+    "reverse": (0, 180),
+    "dextral": (90, 270),
+    "sinistral": (270, 90),
+    "normal": (180, 360),
+}
+possible_rake_dirs = [
+    "dextral",
+    "normal",
+    "reverse",
+    "sinistral",
+    "dextral and reverse",
+    "normal and dextral",
+]
 
 # List of subduction zones to exclude if desired
 subduction_names = ("hikurangi", "puysegur")
 
-dom_dict = {26: 'Puysegur subduction front',
-            10: 'Hikurangi subduction front',
-            20: 'Otago',
-            6: 'East Cape block',
-            2: 'North Waikato - South Auckland',
-            21: 'Southern South Island',
-            25: 'Puysegur Ridge - Bank',
-            9: 'Hikurangi outer rise',
-            14: 'Marlborough Fault System',
-            12: 'Kapiti-Manawatu',
-            7: 'Hikurangi accretionary margin',
-            19: 'Southern Alps',
-            23: 'Fiordland block',
-            15: 'Alpine Fault',
-            18: 'Central Canterbury',
-            13: 'Northwestern South Island',
-            4: 'Havre Trough - Taupo Rift',
-            17: 'Northeastern Canterbury',
-            24: 'Western Fiordland Margin - Caswell High',
-            3: 'western North Island',
-            16: 'North Mernoo fracture zone',
-            27: 'Puysegur-Caswell High outer rise',
-            5: 'North Island Dextral Fault Belt',
-            8: 'Hikurangi accretionary margin - eastern zone'}
+dom_dict = {
+    26: "Puysegur subduction front",
+    10: "Hikurangi subduction front",
+    20: "Otago",
+    6: "East Cape block",
+    2: "North Waikato - South Auckland",
+    21: "Southern South Island",
+    25: "Puysegur Ridge - Bank",
+    9: "Hikurangi outer rise",
+    14: "Marlborough Fault System",
+    12: "Kapiti-Manawatu",
+    7: "Hikurangi accretionary margin",
+    19: "Southern Alps",
+    23: "Fiordland block",
+    15: "Alpine Fault",
+    18: "Central Canterbury",
+    13: "Northwestern South Island",
+    4: "Havre Trough - Taupo Rift",
+    17: "Northeastern Canterbury",
+    24: "Western Fiordland Margin - Caswell High",
+    3: "western North Island",
+    16: "North Mernoo fracture zone",
+    27: "Puysegur-Caswell High outer rise",
+    5: "North Island Dextral Fault Belt",
+    8: "Hikurangi accretionary margin - eastern zone",
+}
 
 valid_dip_range = [0, 90]
 valid_depth_range = [0, 50]
@@ -60,24 +91,37 @@ valid_rake_range = [0, 360]
 valid_sr_range = [0, 60]
 
 # These fields aren't crucial but are in some versions of the relevant files
-expected_fields = ['Depth_D90', 'Dip_pref',
-                   'Dip_dir', 'Dip_max', 'Dip_min', 'Name',
-                   'QualCode', 'Rake_pref', 'Rake_plus', 'Rake_minus', 'Dom_sense',
-                   'Sub_sense',  'SR_pref', 'SR_max', 'SR_min',
-                   'geometry']
+expected_fields = [
+    "Depth_D90",
+    "Dip_pref",
+    "Dip_dir",
+    "Dip_max",
+    "Dip_min",
+    "Name",
+    "QualCode",
+    "Rake_pref",
+    "Rake_plus",
+    "Rake_minus",
+    "Dom_sense",
+    "Sub_sense",
+    "SR_pref",
+    "SR_max",
+    "SR_min",
+    "geometry",
+]
 
 # There will be a mess if these fields don't exist
-required_fields = ['Name', 'Fault_ID', 'geometry']
+required_fields = ["Name", "Fault_ID", "geometry"]
 
 
 def decimal_deg_to_minutes(decdeg: float):
     """
     For use with hybrid model, which uses degrees and minutes.
     """
-    if decdeg < 0.:
+    if decdeg < 0.0:
         decdeg *= -1
     deg = np.int(np.floor(decdeg))
-    mins = 60. * (decdeg - deg)
+    mins = 60.0 * (decdeg - deg)
 
     return deg, mins
 
@@ -105,15 +149,19 @@ def normalize_bearing(bearing: Union[float, int]):
     :return:
     """
     while bearing < 0:
-        bearing += 360.
+        bearing += 360.0
 
-    while bearing >= 360.:
-        bearing -= 360.
+    while bearing >= 360.0:
+        bearing -= 360.0
 
     return bearing
 
 
-def bearing_leq(value: Union[int, float], benchmark: Union[int, float], tolerance: Union[int, float] = 0.1):
+def bearing_leq(
+    value: Union[int, float],
+    benchmark: Union[int, float],
+    tolerance: Union[int, float] = 0.1,
+):
     """
     Check whether a bearing (value) is anticlockwise of another bearing (benchmark)
     :param value:
@@ -129,7 +177,11 @@ def bearing_leq(value: Union[int, float], benchmark: Union[int, float], toleranc
         return False
 
 
-def bearing_geq(value: Union[int, float], benchmark: Union[int, float], tolerance: Union[int, float] = 0.1):
+def bearing_geq(
+    value: Union[int, float],
+    benchmark: Union[int, float],
+    tolerance: Union[int, float] = 0.1,
+):
     """
     Check whether a bearing (value) is clockwise of another bearing (benchmark)
     :param value:
@@ -152,8 +204,8 @@ def reverse_bearing(bearing: Union[int, float]):
     :return:
     """
     assert isinstance(bearing, (float, int))
-    assert 0. <= bearing <= 360.
-    new_bearing = bearing + 180.
+    assert 0.0 <= bearing <= 360.0
+    new_bearing = bearing + 180.0
 
     # Ensure strike is between zero and 360 (bearing)
     return normalize_bearing(new_bearing)
@@ -177,7 +229,9 @@ def reverse_line(line: LineString):
 
     if line.has_z:
         z_back = z[-1::-1]
-        new_line = LineString([[xi, yi, zi] for xi, yi, zi in zip(x_back, y_back, z_back)])
+        new_line = LineString(
+            [[xi, yi, zi] for xi, yi, zi in zip(x_back, y_back, z_back)]
+        )
     else:
         new_line = LineString([[xi, yi] for xi, yi in zip(x_back, y_back)])
     return new_line
@@ -214,7 +268,9 @@ def calculate_dip_direction(line: LineString):
         bearing = 180 - np.degrees(np.arctan2(gradient_x, 1))
     else:
         bearing = 180 - np.degrees(np.arctan2(1 / gradient_y, 1))
-    bearing_vector = np.array([np.sin(np.radians(bearing)), np.cos(np.radians(bearing))])
+    bearing_vector = np.array(
+        [np.sin(np.radians(bearing)), np.cos(np.radians(bearing))]
+    )
 
     # Determine whether line object fits strike convention
     relative_x = x - x[0]
@@ -225,15 +281,15 @@ def calculate_dip_direction(line: LineString):
     num_neg = np.count_nonzero(distances < 0)
 
     if num_neg > num_pos:
-        bearing += 180.
+        bearing += 180.0
 
     dip_direction = bearing
     # Ensure strike is between zero and 360 (bearing)
     while dip_direction < 0:
-        dip_direction += 360.
+        dip_direction += 360.0
 
-    while dip_direction >= 360.:
-        dip_direction -= 360.
+    while dip_direction >= 360.0:
+        dip_direction -= 360.0
 
     return dip_direction
 
@@ -264,11 +320,16 @@ def fault_trace_xml(geometry: LineString, section_name: str, z: Union[float, int
     x, y = geometry.xy
     # Loop through addis each coordinate as sub element
     for x_i, y_i in zip(x, y):
-        if x_i <= 0.:
-            x_i += 360.
-        loc_element = ElemTree.Element("Location", attrib={"Latitude": ll_float_str.format(y_i),
-                                                           "Longitude": ll_float_str.format(x_i),
-                                                           "Depth": ll_float_str.format(z)})
+        if x_i <= 0.0:
+            x_i += 360.0
+        loc_element = ElemTree.Element(
+            "Location",
+            attrib={
+                "Latitude": ll_float_str.format(y_i),
+                "Longitude": ll_float_str.format(x_i),
+                "Depth": ll_float_str.format(z),
+            },
+        )
         trace_element.append(loc_element)
 
     return trace_element
@@ -288,9 +349,14 @@ def fault_polygon_xml(polygon: Polygon, section_name: str, z: Union[float, int] 
     ll_float_str = "{:.4f}"
     x, y = polygon.exterior.xy
     for x_i, y_i in zip(x[:-1], y[:-1]):
-        loc_element = ElemTree.Element("Location", attrib={"Latitude": ll_float_str.format(y_i),
-                                                           "Longitude": ll_float_str.format(x_i),
-                                                           "Depth": ll_float_str.format(z)})
+        loc_element = ElemTree.Element(
+            "Location",
+            attrib={
+                "Latitude": ll_float_str.format(y_i),
+                "Longitude": ll_float_str.format(x_i),
+                "Depth": ll_float_str.format(z),
+            },
+        )
         location_list.append(loc_element)
     polygon_element.append(location_list)
     return polygon_element
@@ -301,11 +367,20 @@ class CfmMultiFault:
     Class to hold data for multiple faults, read in from shapefile (and hopefully also tsurfaces)
     """
 
-    def __init__(self, fault_geodataframe: gpd.GeoDataFrame, exclude_region_polygons: list = None,
-                 exclude_region_min_sr: float = 1.8, include_names: list = None, depth_type: str = "D90",
-                 exclude_aus: bool = True, exclude_zero: bool = True, sort_sr: bool = False,
-                 remove_colons: bool = False, min_dfc: float = 0.0):
-        self.logger = logging.getLogger('cmf_logger')
+    def __init__(
+        self,
+        fault_geodataframe: gpd.GeoDataFrame,
+        exclude_region_polygons: list = None,
+        exclude_region_min_sr: float = 1.8,
+        include_names: list = None,
+        depth_type: str = "D90",
+        exclude_aus: bool = True,
+        exclude_zero: bool = True,
+        sort_sr: bool = False,
+        remove_colons: bool = False,
+        min_dfc: float = 0.0,
+    ):
+        self.logger = logging.getLogger("cmf_logger")
         self.check_input1(fault_geodataframe)
         self.check_input2(fault_geodataframe)
 
@@ -321,7 +396,9 @@ class CfmMultiFault:
                 x, y = poly.exterior.xy
                 if all(np.array(y) < 0):
                     # Assume in WGS (Lon Lat), convert to NZTM
-                    new_x, new_y = transform_wgs2nztm.transform(np.array(x), np.array(y))
+                    new_x, new_y = transform_wgs2nztm.transform(
+                        np.array(x), np.array(y)
+                    )
                     new_poly = Polygon([(xi, yi) for xi, yi in zip(new_x, new_y)])
                     exclude_regions_nztm.append(new_poly)
                 else:
@@ -331,7 +408,9 @@ class CfmMultiFault:
             # Make list of faults outside region
             trimmed_fault_ls = []
             for i, row in fault_geodataframe.iterrows():
-                if not any([row.geometry.within(poly) for poly in exclude_regions_nztm]):
+                if not any(
+                    [row.geometry.within(poly) for poly in exclude_regions_nztm]
+                ):
                     trimmed_fault_ls.append(row)
                 elif row["SR_pref"] >= exclude_region_min_sr:
                     trimmed_fault_ls.append(row)
@@ -352,15 +431,19 @@ class CfmMultiFault:
 
         # Exclude faults with zero slip rate
         if exclude_zero:
-            trimmed_fault_gdf = trimmed_fault_gdf[trimmed_fault_gdf.SR_pref > 0.]
+            trimmed_fault_gdf = trimmed_fault_gdf[trimmed_fault_gdf.SR_pref > 0.0]
 
         # Exclude upper slope faults (A-US classification)
         if exclude_aus:
-            trimmed_fault_gdf = trimmed_fault_gdf[trimmed_fault_gdf.Fault_stat != "A-US"]
+            trimmed_fault_gdf = trimmed_fault_gdf[
+                trimmed_fault_gdf.Fault_stat != "A-US"
+            ]
 
         if depth_type != "D90":
-            assert min_dfc >= 0.
-            trimmed_fault_gdf = trimmed_fault_gdf[trimmed_fault_gdf.Depth_Dfc >= min_dfc]
+            assert min_dfc >= 0.0
+            trimmed_fault_gdf = trimmed_fault_gdf[
+                trimmed_fault_gdf.Depth_Dfc >= min_dfc
+            ]
 
         if sort_sr:
             sorted_df = trimmed_fault_gdf.sort_values("SR_pref", ascending=False)
@@ -389,9 +472,15 @@ class CfmMultiFault:
     def faults(self):
         return self._faults
 
-    def add_fault(self, series: pd.Series, depth_type: str = "D90", remove_colons: bool = False):
-        cfmFault = CfmFault.from_series(series, parent_multifault=self, depth_type=depth_type,
-                                        remove_colons=remove_colons)
+    def add_fault(
+        self, series: pd.Series, depth_type: str = "D90", remove_colons: bool = False
+    ):
+        cfmFault = CfmFault.from_series(
+            series,
+            parent_multifault=self,
+            depth_type=depth_type,
+            remove_colons=remove_colons,
+        )
         self.faults.append(cfmFault)
 
     @property
@@ -402,20 +491,37 @@ class CfmMultiFault:
             return []
 
     @classmethod
-    def from_shp(cls, filename: str, exclude_region_polygons: List[Polygon] = None, depth_type: str = "D90",
-                 exclude_region_min_sr: float = 1.8, sort_sr: bool = False, min_dfc: float = 0.0):
+    def from_shp(
+        cls,
+        filename: str,
+        exclude_region_polygons: List[Polygon] = None,
+        depth_type: str = "D90",
+        exclude_region_min_sr: float = 1.8,
+        sort_sr: bool = False,
+        min_dfc: float = 0.0,
+    ):
         """
         Read CFM shapefile
         """
         assert os.path.exists(filename)
         fault_geodataframe = gpd.GeoDataFrame.from_file(filename)
-        multi_fault = cls(fault_geodataframe, exclude_region_polygons=exclude_region_polygons,
-                          exclude_region_min_sr=exclude_region_min_sr, depth_type=depth_type, sort_sr=sort_sr,
-                          min_dfc=min_dfc)
+        multi_fault = cls(
+            fault_geodataframe,
+            exclude_region_polygons=exclude_region_polygons,
+            exclude_region_min_sr=exclude_region_min_sr,
+            depth_type=depth_type,
+            sort_sr=sort_sr,
+            min_dfc=min_dfc,
+        )
         return multi_fault
 
-    def to_opensha_xml(self, exclude_subduction: bool = True, buffer_width: float = 5000.,
-                       write_buffers: bool = True, dip_value: str = "pref"):
+    def to_opensha_xml(
+        self,
+        exclude_subduction: bool = True,
+        buffer_width: float = 5000.0,
+        write_buffers: bool = True,
+        dip_value: str = "pref",
+    ):
         """
         Write out XML in OpenSHA format
         :param exclude_subduction: Do not include subduction zones from CFM
@@ -434,11 +540,22 @@ class CfmMultiFault:
         i = 0
         for fault in self.faults:
             # Identify subduction zone sources to include (only if exclude_subduction is True)
-            exclude_condition = all([exclude_subduction, any([name in fault.name.lower()
-                                                              for name in subduction_names])])
+            exclude_condition = all(
+                [
+                    exclude_subduction,
+                    any([name in fault.name.lower() for name in subduction_names]),
+                ]
+            )
             # Add XML for fault
             if not exclude_condition:
-                fm_element.append(fault.to_xml(section_id=i, buffer_width=buffer_width, write_buffers=write_buffers, dip_value=dip_value))
+                fm_element.append(
+                    fault.to_xml(
+                        section_id=i,
+                        buffer_width=buffer_width,
+                        write_buffers=write_buffers,
+                        dip_value=dip_value,
+                    )
+                )
                 i += 1
 
         # Awkward way of getting the xml file to be written in a way that's easy to read.
@@ -467,16 +584,32 @@ class CfmMultiFault:
         :param output_csv: File to write output
         :param exclude_subduction: Do not include subduction zones from CFM
         """
-        columns = ["FaultName", "DipMin", "DipBest", "DipMax", "DipDir", "DepthMin", "DepthBest", "DepthMax",
-                   "Top", "SRMin", "SRBest", "SRMax"]
+        columns = [
+            "FaultName",
+            "DipMin",
+            "DipBest",
+            "DipMax",
+            "DipDir",
+            "DepthMin",
+            "DepthBest",
+            "DepthMax",
+            "Top",
+            "SRMin",
+            "SRBest",
+            "SRMax",
+        ]
 
         output_str = ",".join(columns) + "\n"
         num_columns = len(columns)
 
         for fault in self.faults:
             # Identify subduction zone sources to include (only if exclude_subduction is True)
-            exclude_condition = all([exclude_subduction, any([name in fault.name.lower()
-                                                              for name in subduction_names])])
+            exclude_condition = all(
+                [
+                    exclude_subduction,
+                    any([name in fault.name.lower() for name in subduction_names]),
+                ]
+            )
             # Add XML for fault
             if not exclude_condition:
                 output_str += fault.fault_to_hybrid_csv(num_columns=num_columns)
@@ -492,8 +625,12 @@ class CfmMultiFault:
         out_str = ""
         for fault in self.faults:
             # Identify subduction zone sources to include (only if exclude_subduction is True)
-            exclude_condition = all([exclude_subduction, any([name in fault.name.lower()
-                                                              for name in subduction_names])])
+            exclude_condition = all(
+                [
+                    exclude_subduction,
+                    any([name in fault.name.lower() for name in subduction_names]),
+                ]
+            )
             # Add XML for fault
             if not exclude_condition:
                 out_str += fault.trace_to_gmt()
@@ -509,10 +646,18 @@ class CfmFault:
         :param parent_multifault:
         """
         # Attributes usually provided in CFM trace shapefile
-        self.logger = logging.getLogger('cmf_logger')
+        self.logger = logging.getLogger("cmf_logger")
         self._parent = parent_multifault
-        self._depth_best, self._depth_min, self._depth_max, self._depth_stdev = (None,) * 4
-        self._dip_best, self._dip_min, self._dip_max, self._dip_dir, self._dip_dir_str = (None,) * 5
+        self._depth_best, self._depth_min, self._depth_max, self._depth_stdev = (
+            None,
+        ) * 4
+        (
+            self._dip_best,
+            self._dip_min,
+            self._dip_max,
+            self._dip_dir,
+            self._dip_dir_str,
+        ) = (None,) * 5
         self._name = None
         self._number, self._qual_code = (None,) * 2
         self._rake_best, self._rake_max, self._rake_min = (None,) * 3
@@ -562,8 +707,14 @@ class CfmFault:
         depth_v = self.validate_depth(depth)
         for depth_value in (self.depth_min, self.depth_best):
             if depth_value is not None and depth_v < depth_value:
-                print("Warning: depth_max lower than either depth_min or depth_best ({})".format(self.name))
-                self.logger.warning("depth_max lower than either depth_min or depth_best")
+                print(
+                    "Warning: depth_max lower than either depth_min or depth_best ({})".format(
+                        self.name
+                    )
+                )
+                self.logger.warning(
+                    "depth_max lower than either depth_min or depth_best"
+                )
 
         self._depth_max = depth_v
 
@@ -572,8 +723,14 @@ class CfmFault:
         depth_v = self.validate_depth(depth)
         for depth_value in (self.depth_max, self.depth_best):
             if depth_value is not None and depth_v > depth_value:
-                print("Warning: depth_min higher than either depth_max or depth_best ({})".format(self.name))
-                self.logger.warning("depth_min higher than either depth_max or depth_best")
+                print(
+                    "Warning: depth_min higher than either depth_max or depth_best ({})".format(
+                        self.name
+                    )
+                )
+                self.logger.warning(
+                    "depth_min higher than either depth_max or depth_best"
+                )
         self._depth_min = depth_v
 
     def validate_depth(self, depth: Union[float, int]):
@@ -592,7 +749,7 @@ class CfmFault:
     @depth_stdev.setter
     def depth_stdev(self, dstd):
         assert isinstance(dstd, (int, float))
-        assert dstd >= 0.
+        assert dstd >= 0.0
         self._depth_stdev = dstd
 
     # Dips
@@ -617,28 +774,48 @@ class CfmFault:
         dip_v = self.validate_dip(dip)
         if self.dip_min is not None:
             if dip_v < self.dip_min:
-                print("{}: dip_best ({}) lower than dip_min ({})".format(self.name, dip_v, self.dip_min))
+                print(
+                    "{}: dip_best ({}) lower than dip_min ({})".format(
+                        self.name, dip_v, self.dip_min
+                    )
+                )
         if self.dip_max is not None:
             if dip_v > self.dip_max:
-                print("{}: dip_best ({}) greater than dip_max ({})".format(self.name, dip_v, self.dip_max))
+                print(
+                    "{}: dip_best ({}) greater than dip_max ({})".format(
+                        self.name, dip_v, self.dip_max
+                    )
+                )
         self._dip_best = dip_v
 
     @dip_max.setter
     def dip_max(self, dip: Union[float, int]):
         dip_v = self.validate_dip(dip)
-        for key, dip_value in zip(["dip_min", "dip_best"], [self.dip_min, self.dip_best]):
+        for key, dip_value in zip(
+            ["dip_min", "dip_best"], [self.dip_min, self.dip_best]
+        ):
             if dip_value is not None and bearing_leq(dip_v, dip_value):
-                print("{}: dip_max ({}) is lower than {} ({})".format(self.name, dip_v, key, dip_value))
+                print(
+                    "{}: dip_max ({}) is lower than {} ({})".format(
+                        self.name, dip_v, key, dip_value
+                    )
+                )
                 self.logger.warning("dip_max is lower than dip min or dip best")
         self._dip_max = dip_v
 
     @dip_min.setter
     def dip_min(self, dip: Union[float, int]):
         dip_v = self.validate_dip(dip)
-        for key, dip_value in zip(["dip_max", "dip_best"], [self.dip_max, self.dip_best]):
+        for key, dip_value in zip(
+            ["dip_max", "dip_best"], [self.dip_max, self.dip_best]
+        ):
             if dip_value is not None and bearing_geq(dip_v, dip_value):
                 # print("{}: dip_min ({:.2f}) is higher than {} ({:.2f})".format(self.name, dip_v, key, dip_value)) #{:.2f} formatting is not working
-                print("{}: dip_min ({}) is higher than {} ({})".format(self.name, dip_v, key, dip_value))
+                print(
+                    "{}: dip_min ({}) is higher than {} ({})".format(
+                        self.name, dip_v, key, dip_value
+                    )
+                )
                 self.logger.warning("dip_min is higher than dip max or dip best")
 
         self._dip_min = dip_v
@@ -651,7 +828,8 @@ class CfmFault:
             return root_mean_square(np.array([self.dip_min, self.dip_max]))
         else:
             raise ValueError(
-                "Insufficient data to calculate dip_sigma!")  # <= not sure if you need this step as this will go through validate_dip
+                "Insufficient data to calculate dip_sigma!"
+            )  # <= not sure if you need this step as this will go through validate_dip
 
     @dip_dir_str.setter
     def dip_dir_str(self, dip_dir: str):
@@ -680,7 +858,7 @@ class CfmFault:
         """
         return self._dip_dir
 
-    def validate_dip_direction(self, tolerance: float = 10.):
+    def validate_dip_direction(self, tolerance: float = 10.0):
         """
         Compares dip direction string (e.g. NW) with
         :return:
@@ -699,16 +877,34 @@ class CfmFault:
             if self.dip_dir_str != "SUBVERTICAL AND VARIABLE":
                 min_dd_range, max_dd_range = dip_direction_ranges[self.dip_dir_str]
                 if self.dip_dir_str != "N":
-                    if not all([min_dd_range - tolerance <= dd_from_trace, dd_from_trace <= max_dd_range + tolerance]):
+                    if not all(
+                        [
+                            min_dd_range - tolerance <= dd_from_trace,
+                            dd_from_trace <= max_dd_range + tolerance,
+                        ]
+                    ):
                         reversed_dd = reverse_bearing(dd_from_trace)
-                        if all([min_dd_range - tolerance <= reversed_dd, reversed_dd <= max_dd_range + tolerance]):
+                        if all(
+                            [
+                                min_dd_range - tolerance <= reversed_dd,
+                                reversed_dd <= max_dd_range + tolerance,
+                            ]
+                        ):
                             self._nztm_trace = reverse_line(self.nztm_trace)
                             self._dip_dir = reversed_dd
                         else:
-                            print("{}: Supplied trace and dip direction {} are inconsistent: expect either {:.1f}"
-                                  "or {:.1f} dip azimuth. Please check...".format(self.name, self.dip_dir_str,
-                                                                                  dd_from_trace, reversed_dd))
-                            self.logger.warning("Supplied trace and dip direction are inconsistent")
+                            print(
+                                "{}: Supplied trace and dip direction {} are inconsistent: expect either {:.1f}"
+                                "or {:.1f} dip azimuth. Please check...".format(
+                                    self.name,
+                                    self.dip_dir_str,
+                                    dd_from_trace,
+                                    reversed_dd,
+                                )
+                            )
+                            self.logger.warning(
+                                "Supplied trace and dip direction are inconsistent"
+                            )
 
                             self._dip_dir = dd_from_trace
 
@@ -716,15 +912,30 @@ class CfmFault:
                         self._dip_dir = dd_from_trace
                 else:
                     reversed_dd = reverse_bearing(dd_from_trace)
-                    if any([315. - tolerance <= dds for dds in [dd_from_trace, reversed_dd]]):
+                    if any(
+                        [
+                            315.0 - tolerance <= dds
+                            for dds in [dd_from_trace, reversed_dd]
+                        ]
+                    ):
                         self._dip_dir = max([dd_from_trace, reversed_dd])
-                    elif any([dds <= 45. + tolerance for dds in [dd_from_trace, reversed_dd]]):
+                    elif any(
+                        [
+                            dds <= 45.0 + tolerance
+                            for dds in [dd_from_trace, reversed_dd]
+                        ]
+                    ):
                         self._dip_dir = min([dd_from_trace, reversed_dd])
                     else:
-                        print("{}: Supplied trace and dip direction {} are inconsistent: expect either {:.1f} or {:.1f}"
-                              " dip azimuth. Please check...".format(self.name, self.dip_dir_str,
-                                                                     dd_from_trace, reversed_dd))
-                        self.logger.warning("Supplied trace and dip direction are inconsistent")
+                        print(
+                            "{}: Supplied trace and dip direction {} are inconsistent: expect either {:.1f} or {:.1f}"
+                            " dip azimuth. Please check...".format(
+                                self.name, self.dip_dir_str, dd_from_trace, reversed_dd
+                            )
+                        )
+                        self.logger.warning(
+                            "Supplied trace and dip direction are inconsistent"
+                        )
 
                         self._dip_dir = dd_from_trace
 
@@ -749,30 +960,38 @@ class CfmFault:
         assert self.dip_best is not None
         if self.dip_dir is None:
             # Assume vertical
-            return np.array([0., 0., -1])
+            return np.array([0.0, 0.0, -1])
         else:
             z = np.sin(np.radians(self.dip_best))
-            x, y = np.cos(np.radians(self.dip_best)) * np.array([np.sin(np.radians(self.dip_dir)),
-                                                                 np.cos(np.radians(self.dip_dir))])
+            x, y = np.cos(np.radians(self.dip_best)) * np.array(
+                [np.sin(np.radians(self.dip_dir)), np.cos(np.radians(self.dip_dir))]
+            )
         return np.array([x, y, -z])
 
     @property
     def down_dip_polygon(self):
-        """
-
-        """
+        """ """
         surface_trace_array = np.vstack(self.nztm_trace.xy).T
-        if abs(self.down_dip_vector[-1]) > 1.e-3:
-            bottom_trace = surface_trace_array + -1. * self.down_dip_vector[:-1] * \
-                           (self.depth_best / self.down_dip_vector[-1]) * 1.e3
+        if abs(self.down_dip_vector[-1]) > 1.0e-3:
+            bottom_trace = (
+                surface_trace_array
+                + -1.0
+                * self.down_dip_vector[:-1]
+                * (self.depth_best / self.down_dip_vector[-1])
+                * 1.0e3
+            )
         else:
-            bottom_trace = surface_trace_array + self.down_dip_vector[:-1] * 100.e3
+            bottom_trace = surface_trace_array + self.down_dip_vector[:-1] * 100.0e3
 
         combined_polygon_array = np.vstack((surface_trace_array, bottom_trace[::-1]))
         return Polygon(combined_polygon_array)
 
-    def surface_trace_buffer(self, buffer_distance: Union[int, float] = 100., cap_style: int = 2,
-                             join_style: int = 2):
+    def surface_trace_buffer(
+        self,
+        buffer_distance: Union[int, float] = 100.0,
+        cap_style: int = 2,
+        join_style: int = 2,
+    ):
         """
 
         :param buffer_distance:
@@ -781,10 +1000,16 @@ class CfmFault:
         :param join_style: Default is mitred
         :return:
         """
-        return self.nztm_trace.buffer(buffer_distance, cap_style=cap_style, join_style=join_style)
+        return self.nztm_trace.buffer(
+            buffer_distance, cap_style=cap_style, join_style=join_style
+        )
 
-    def combined_buffer_polygon(self, buffer_distance, cap_style: int = 2, join_style: int = 2, wgs: bool = True):
-        trace_buffer = self.surface_trace_buffer(buffer_distance, cap_style=cap_style, join_style=join_style)
+    def combined_buffer_polygon(
+        self, buffer_distance, cap_style: int = 2, join_style: int = 2, wgs: bool = True
+    ):
+        trace_buffer = self.surface_trace_buffer(
+            buffer_distance, cap_style=cap_style, join_style=join_style
+        )
         combined_buffer = unary_union([trace_buffer, self.down_dip_polygon])
 
         if wgs:
@@ -844,12 +1069,20 @@ class CfmFault:
         if self.rake_min is not None:
             if rake_v < self.rake_min:
                 # print("{}: rake_best ({.2f}) lower than rake_min ({.2f})".format(self.name, rake_v, self.rake_min))
-                print("{}: rake_best ({}) lower than rake_min ({})".format(self.name, rake_v, self.rake_min))
+                print(
+                    "{}: rake_best ({}) lower than rake_min ({})".format(
+                        self.name, rake_v, self.rake_min
+                    )
+                )
                 self.logger.warning("rake_best is lower than rake_min")
         if self.rake_max is not None:
             if rake_v > self.rake_max:
                 # print("{}: rake_best ({.2f}) greater than rake_max ({.2f})".format(self.name, rake_v, self.rake_max))
-                print("{}: rake_best ({}) greater than rake_max ({})".format(self.name, rake_v, self.rake_max))
+                print(
+                    "{}: rake_best ({}) greater than rake_max ({})".format(
+                        self.name, rake_v, self.rake_max
+                    )
+                )
                 self.logger.warning("rake_best is greater than rake_max")
         self._rake_best = rake_v
 
@@ -863,37 +1096,49 @@ class CfmFault:
         """
         new_rake = rake
         while new_rake > 180:
-            new_rake -= 360.
-        while new_rake <= -180.:
-            new_rake += 360.
+            new_rake -= 360.0
+        while new_rake <= -180.0:
+            new_rake += 360.0
         return new_rake
 
     @rake_max.setter
     def rake_max(self, rake: Union[float, int]):
         rake_v = self.validate_rake(rake)
-        for key, rake_value in zip(["rake_min", "rake_best"], [self.rake_min, self.rake_best]):
+        for key, rake_value in zip(
+            ["rake_min", "rake_best"], [self.rake_min, self.rake_best]
+        ):
             if rake_value is not None and bearing_leq(rake_v, rake_value):
-                print("{}: rake_max ({}) is lower than {} ({})".format(self.name, rake_v, key, rake_value))
+                print(
+                    "{}: rake_max ({}) is lower than {} ({})".format(
+                        self.name, rake_v, key, rake_value
+                    )
+                )
                 self.logger.warning("rake_max is lower than rake min or rake best")
         self._rake_max = rake_v
 
     @rake_min.setter
     def rake_min(self, rake: Union[float, int]):
         rake_v = self.validate_rake(rake)
-        for key, rake_value in zip(["rake_max", "rake_best"], [self.rake_max, self.rake_best]):
+        for key, rake_value in zip(
+            ["rake_max", "rake_best"], [self.rake_max, self.rake_best]
+        ):
             if rake_value is not None and bearing_geq(rake_v, rake_value):
                 # print("{}: rake_min ({:.2f}) is higher than {} ({:.2f})".format(self.name, rake_v, key, rake_value))
-                print("{}: rake_min ({}) is higher than {} ({})".format(self.name, rake_v, key, rake_value))
+                print(
+                    "{}: rake_min ({}) is higher than {} ({})".format(
+                        self.name, rake_v, key, rake_value
+                    )
+                )
                 self.logger.warning("rake_min is higher than rake max or rake best")
         self._rake_min = rake_v
 
     @staticmethod
     def validate_rake(rake: Union[float, int]):
         assert isinstance(rake, (float, int))
-        if -180. <= rake < 0.:
+        if -180.0 <= rake < 0.0:
             rake += 360
-        while rake >= 360.:
-            rake -= 360.
+        while rake >= 360.0:
+            rake -= 360.0
         assert valid_rake_range[0] <= rake <= valid_rake_range[1]
         return rake
 
@@ -918,25 +1163,41 @@ class CfmFault:
 
     def validate_rake_sense(self):
         if any([a is None for a in (self.rake_best, self.sense_dom)]):
-            print("{}: Insufficient data to compare rake and slip sense".format(self.name))
+            print(
+                "{}: Insufficient data to compare rake and slip sense".format(self.name)
+            )
             self.logger.warning("Insufficient data to compare rake and slip sense")
             return
         else:
             dominant_range = dominant_rake_ranges[self.sense_dom]
-            if not all([bearing_geq(self.rake_best, dominant_range[0]),
-                        bearing_leq(self.rake_best, dominant_range[1])]):
-                print("{}: Supplied rake ({:.2f} deg) differs from dominant slip sense ({})".format(self.name,
-                                                                                                    self.rake_best,
-                                                                                                    self.sense_dom))
+            if not all(
+                [
+                    bearing_geq(self.rake_best, dominant_range[0]),
+                    bearing_leq(self.rake_best, dominant_range[1]),
+                ]
+            ):
+                print(
+                    "{}: Supplied rake ({:.2f} deg) differs from dominant slip sense ({})".format(
+                        self.name, self.rake_best, self.sense_dom
+                    )
+                )
                 self.logger.warning("Supplied rake differs from dominant slip sense")
             if self.sense_sec is not None:
                 sec_range = secondary_rake_ranges[self.sense_sec]
-                if not all([bearing_geq(self.rake_best, sec_range[0]),
-                            bearing_leq(self.rake_best, sec_range[1])]):
-                    print("{}: Supplied rake ({:.2f} deg) inconsistent with sec slip sense ({})".format(self.name,
-                                                                                                        self.rake_best,
-                                                                                                        self.sense_sec))
-                    self.logger.warning("Supplied rake inconsistent with sec slip sense")
+                if not all(
+                    [
+                        bearing_geq(self.rake_best, sec_range[0]),
+                        bearing_leq(self.rake_best, sec_range[1]),
+                    ]
+                ):
+                    print(
+                        "{}: Supplied rake ({:.2f} deg) inconsistent with sec slip sense ({})".format(
+                            self.name, self.rake_best, self.sense_sec
+                        )
+                    )
+                    self.logger.warning(
+                        "Supplied rake inconsistent with sec slip sense"
+                    )
 
     @property
     def sr_best(self):
@@ -955,10 +1216,18 @@ class CfmFault:
         slip_rate = self.validate_sr(slip_rate)
         if self.sr_min is not None:
             if slip_rate < self.sr_min:
-                print("{}: sr_best ({.2f}) lower than sr_min ({.2f})".format(self.name, slip_rate, self.sr_min))
+                print(
+                    "{}: sr_best ({.2f}) lower than sr_min ({.2f})".format(
+                        self.name, slip_rate, self.sr_min
+                    )
+                )
         if self.sr_max is not None:
             if slip_rate > self.sr_max:
-                print("{}: sr_best ({.2f}) greater than sr_max ({.2f})".format(self.name, slip_rate, self.sr_max))
+                print(
+                    "{}: sr_best ({.2f}) greater than sr_max ({.2f})".format(
+                        self.name, slip_rate, self.sr_max
+                    )
+                )
         self._sr_best = slip_rate
 
     @sr_min.setter
@@ -966,7 +1235,11 @@ class CfmFault:
         slip_rate = self.validate_sr(slip_rate)
         for key, sr_value in zip(["sr_max", "sr_best"], [self.sr_max, self.sr_best]):
             if sr_value is not None and bearing_geq(slip_rate, sr_value):
-                print("{}: sr_min ({:.2f}) is higher than {} ({:.2f})".format(self.name, slip_rate, key, sr_value))
+                print(
+                    "{}: sr_min ({:.2f}) is higher than {} ({:.2f})".format(
+                        self.name, slip_rate, key, sr_value
+                    )
+                )
         self._sr_min = slip_rate
 
     @sr_max.setter
@@ -974,7 +1247,11 @@ class CfmFault:
         self.validate_sr(slip_rate)
         for key, sr_value in zip(["sr_min", "sr_best"], [self.sr_max, self.sr_best]):
             if sr_value is not None and bearing_leq(slip_rate, sr_value):
-                print("{}: sr_max ({:.2f}) is lower than {} ({:.2f})".format(self.name, slip_rate, key, sr_value))
+                print(
+                    "{}: sr_max ({:.2f}) is lower than {} ({:.2f})".format(
+                        self.name, slip_rate, key, sr_value
+                    )
+                )
         self._sr_max = slip_rate
 
     @staticmethod
@@ -1044,8 +1321,13 @@ class CfmFault:
         return self._parent
 
     @classmethod
-    def from_series(cls, series: pd.Series, parent_multifault: CfmMultiFault = None, depth_type: str = "D90",
-                    remove_colons: bool = False):
+    def from_series(
+        cls,
+        series: pd.Series,
+        parent_multifault: CfmMultiFault = None,
+        depth_type: str = "D90",
+        remove_colons: bool = False,
+    ):
         assert isinstance(series, pd.Series)
         assert depth_type in ["D90", "Dfc80", "Dfc66", "Dfc"]
         fault = cls(parent_multifault=parent_multifault)
@@ -1053,12 +1335,24 @@ class CfmFault:
         if remove_colons:
             fault.name = series["Name"].replace(":", "")
         fault.number = int(series["Fault_ID"])
-        fault.dip_best, fault.dip_min, fault.dip_max = series["Dip_pref"], series["Dip_min"], series["Dip_max"]
+        fault.dip_best, fault.dip_min, fault.dip_max = (
+            series["Dip_pref"],
+            series["Dip_min"],
+            series["Dip_max"],
+        )
         fault.nztm_trace = series["geometry"]
         fault.dip_dir_str = series["Dip_dir"]
-        fault.rake_best, fault.rake_min, fault.rake_max = series["Rake_pref"], series["Rake_minus"], series["Rake_plus"]
+        fault.rake_best, fault.rake_min, fault.rake_max = (
+            series["Rake_pref"],
+            series["Rake_minus"],
+            series["Rake_plus"],
+        )
         fault.sense_dom, fault.sense_sec = series["Dom_sense"], series["Sub_sense"]
-        fault.sr_best, fault.sr_min, fault.sr_max = series["SR_pref"], series["SR_min"], series["SR_max"]
+        fault.sr_best, fault.sr_min, fault.sr_max = (
+            series["SR_pref"],
+            series["SR_min"],
+            series["SR_max"],
+        )
         if depth_type == "D90":
             fault.depth_best = series["Depth_D90"]
         elif depth_type == "Dfc80":
@@ -1074,22 +1368,45 @@ class CfmFault:
         return fault
 
     @classmethod
-    def from_series_old(cls, series: pd.Series, parent_multifault: CfmMultiFault = None):
+    def from_series_old(
+        cls, series: pd.Series, parent_multifault: CfmMultiFault = None
+    ):
         assert isinstance(series, pd.Series)
         fault = cls(parent_multifault=parent_multifault)
         fault.name = series["FZ_Name"]
         fault.number = int(series["Number"])
-        fault.dip_best, fault.dip_min, fault.dip_max = series["Dip_Best"], series["Dip_Min"], series["Dip_Max"]
+        fault.dip_best, fault.dip_min, fault.dip_max = (
+            series["Dip_Best"],
+            series["Dip_Min"],
+            series["Dip_Max"],
+        )
         fault.nztm_trace = series["geometry"]
         fault.dip_dir_str = series["Dip_Dir"]
-        fault.rake_best, fault.rake_min, fault.rake_max = series["Rake_Best"], series["Rake_Min"], series["Rake_Max"]
+        fault.rake_best, fault.rake_min, fault.rake_max = (
+            series["Rake_Best"],
+            series["Rake_Min"],
+            series["Rake_Max"],
+        )
         fault.sense_dom, fault.sense_sec = series["Sense_Dom"], series["Sense_Sec"]
-        fault.sr_best, fault.sr_min, fault.sr_max = series["SR_Best"], series["SR_Min"], series["SR_Max"]
-        fault.depth_best, fault.depth_min, fault.depth_max = series["Depth_Best"], series["Depth_Min"], series[
-            "Depth_Max"]
+        fault.sr_best, fault.sr_min, fault.sr_max = (
+            series["SR_Best"],
+            series["SR_Min"],
+            series["SR_Max"],
+        )
+        fault.depth_best, fault.depth_min, fault.depth_max = (
+            series["Depth_Best"],
+            series["Depth_Min"],
+            series["Depth_Max"],
+        )
         return fault
 
-    def to_xml(self, section_id: int, buffer_width: float = 5000., write_buffers: bool = True, dip_value: str = "pref"):
+    def to_xml(
+        self,
+        section_id: int,
+        buffer_width: float = 5000.0,
+        write_buffers: bool = True,
+        dip_value: str = "pref",
+    ):
         # Unique fault identifier
         tag_name = "i{:d}".format(section_id)
         # Metadata
@@ -1100,23 +1417,24 @@ class CfmFault:
             dip_used = self.dip_min
         else:
             dip_used = self.dip_max
-            
-        attribute_dic = {"sectionId": "{:d}".format(section_id),
-                         "sectionName": self.name,
-                         "aveLongTermSlipRate": "{:.2f}".format(self.sr_best),
-                         "slipRateStdDev": "{:.2f}".format(self.sr_sigma),
-                         "aveDip": "{:.1f}".format(dip_used),
-                         "aveRake": "{:.1f}".format(self.rake_to_opensha(self.rake_best)),
-                         "aveUpperDepth": "0.0",
-                         "aveLowerDepth": "{:.1f}".format(self.depth_best),
-                         "aseismicSlipFactor": "0.0",
-                         "couplingCoeff": "1.0",
-                         "dipDirection": "{:.1f}".format(self.dip_dir),
-                         "parentSectionId": "-1",
-                         "connector": "false",
-                         "domainNo": f"{self.dom_num:d}",
-                         "domainName": f"{self.dom_name}"
-                         }
+
+        attribute_dic = {
+            "sectionId": "{:d}".format(section_id),
+            "sectionName": self.name,
+            "aveLongTermSlipRate": "{:.2f}".format(self.sr_best),
+            "slipRateStdDev": "{:.2f}".format(self.sr_sigma),
+            "aveDip": "{:.1f}".format(dip_used),
+            "aveRake": "{:.1f}".format(self.rake_to_opensha(self.rake_best)),
+            "aveUpperDepth": "0.0",
+            "aveLowerDepth": "{:.1f}".format(self.depth_best),
+            "aseismicSlipFactor": "0.0",
+            "couplingCoeff": "1.0",
+            "dipDirection": "{:.1f}".format(self.dip_dir),
+            "parentSectionId": "-1",
+            "connector": "false",
+            "domainNo": f"{self.dom_num:d}",
+            "domainName": f"{self.dom_name}",
+        }
 
         # Initialize XML element
         fault_element = ElemTree.Element(tag_name, attrib=attribute_dic)
@@ -1125,7 +1443,9 @@ class CfmFault:
         fault_element.append(trace_element)
         if write_buffers:
             # Add sub element for FZ buffer
-            polygon_element = fault_polygon_xml(self.combined_buffer_polygon(buffer_width), self.name)
+            polygon_element = fault_polygon_xml(
+                self.combined_buffer_polygon(buffer_width), self.name
+            )
             fault_element.append(polygon_element)
 
         return fault_element
@@ -1149,31 +1469,37 @@ class CfmFault:
         x1_deg, x1_mins = decimal_deg_to_minutes(x1)
         y1_deg, y1_mins = decimal_deg_to_minutes(y1)
 
-        seg_str = (f"{self.name},{x0_deg:d},{x0_mins:.1f},{y0_deg:d},{y0_mins:.1f},"
-                   f"{x1_deg:d},{x1_mins:.1f},{y1_deg:d},{y1_mins:.1f}\n")
+        seg_str = (
+            f"{self.name},{x0_deg:d},{x0_mins:.1f},{y0_deg:d},{y0_mins:.1f},"
+            f"{x1_deg:d},{x1_mins:.1f},{y1_deg:d},{y1_mins:.1f}\n"
+        )
         return self.pad_commas(seg_str, num_columns)
 
     def trace_to_hybrid_csv(self, num_columns: int):
-        """
-
-        """
+        """ """
 
         x, y = self.wgs_trace.xy
         coord_ls = list(self.wgs_trace.coords)
 
-        out_str = self.pad_commas(f"{self.name},{len(coord_ls) - 1}D", num_columns=num_columns)
+        out_str = self.pad_commas(
+            f"{self.name},{len(coord_ls) - 1}D", num_columns=num_columns
+        )
         out_str += self.to_segment(x[0], y[0], x[-1], y[-1], num_columns=num_columns)
 
         for c0, c1 in zip(coord_ls[:-1], coord_ls[1:]):
-            out_str += self.to_segment(c0[0], c0[1], c1[0], c1[1], num_columns=num_columns)
+            out_str += self.to_segment(
+                c0[0], c0[1], c1[0], c1[1], num_columns=num_columns
+            )
 
         out_str += self.pad_commas(f"{self.name},-1\n", num_columns=num_columns)
         return out_str
 
     def fault_to_hybrid_csv(self, num_columns: int):
-        data_str = (f"{self.name},{int(self.dip_min):d},{int(self.dip_best):d},{int(self.dip_max):d},"
-                    f"{self.dip_dir:.1f},{self.depth_best - self.depth_stdev:.1f},{self.depth_best:.1f},"
-                    f"{self.depth_best + self.depth_stdev:.1f},0.0,{self.sr_min:.2f},{self.sr_best:.2f},"
-                    f"{self.sr_max:.2f}\n")
+        data_str = (
+            f"{self.name},{int(self.dip_min):d},{int(self.dip_best):d},{int(self.dip_max):d},"
+            f"{self.dip_dir:.1f},{self.depth_best - self.depth_stdev:.1f},{self.depth_best:.1f},"
+            f"{self.depth_best + self.depth_stdev:.1f},0.0,{self.sr_min:.2f},{self.sr_best:.2f},"
+            f"{self.sr_max:.2f}\n"
+        )
         data_str += self.trace_to_hybrid_csv(num_columns=num_columns)
         return data_str

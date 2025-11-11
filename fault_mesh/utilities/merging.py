@@ -2,7 +2,7 @@
 Functions for merging segments that are nearly adjacent.
 This module provides functions to align and merge line segments that are close to each other.
 It includes functions to densify line segments, align two nearly adjacent segments, merge two nearly adjacent segments, and merge multiple nearly adjacent segments. The merging process is based on the distance between the segments and can be customized with a tolerance parameter.
-The functions are designed to work with Shapely LineString objects and can be used in geospatial applications where line segments need to be combined or aligned.   
+The functions are designed to work with Shapely LineString objects and can be used in geospatial applications where line segments need to be combined or aligned.
 
 Functions:
     - densify_line: Densifies a LineString by adding interpolated points along the line.
@@ -12,10 +12,12 @@ Functions:
     - sorted_merge: Merges a list of LineString segments into a single LineString by iteratively combining the nearest segments.
 """
 
-import numpy as np
 from typing import List, Union
+
+import numpy as np
 from shapely.geometry import LineString, Point
 from shapely.ops import linemerge
+
 
 def densify_line(line: LineString, density: float = 1.3):
     """
@@ -38,7 +40,10 @@ def densify_line(line: LineString, density: float = 1.3):
     sorted_coords = sorted(combined_coords, key=lambda x: line.project(x))
     return LineString(sorted_coords)
 
-def align_two_nearly_adjacent_segments(segment_list: List[LineString], tolerance: float = 200., densify: float = 1.e3):
+
+def align_two_nearly_adjacent_segments(
+    segment_list: List[LineString], tolerance: float = 200.0, densify: float = 1.0e3
+):
     """Aligns two nearly adjacent line segments by moving their closest endpoints to a common midpoint.
     This function takes two LineString objects that are within a specified distance tolerance of each other
     and aligns them by replacing their closest endpoints with a common midpoint. The function can optionally
@@ -83,7 +88,10 @@ def align_two_nearly_adjacent_segments(segment_list: List[LineString], tolerance
 
     return LineString(new_line1), LineString(new_line2)
 
-def merge_two_nearly_adjacent_segments(segment_list: List[LineString], tolerance: float = 200., densify: float = 1.e3):
+
+def merge_two_nearly_adjacent_segments(
+    segment_list: List[LineString], tolerance: float = 200.0, densify: float = 1.0e3
+):
     """Merge two nearly adjacent line segments into a single line.
     This function takes two line segments that are close to each other (within a specified tolerance)
     and merges them into a single continuous LineString. It first aligns the segments using
@@ -94,11 +102,17 @@ def merge_two_nearly_adjacent_segments(segment_list: List[LineString], tolerance
     :return: A single merged LineString created from the two input segments
     :rtype: LineString
     """
-    new_line1, new_line2 = align_two_nearly_adjacent_segments(segment_list, tolerance, densify=densify)
+    new_line1, new_line2 = align_two_nearly_adjacent_segments(
+        segment_list, tolerance, densify=densify
+    )
     return linemerge([new_line1, new_line2])
 
 
-def merge_multiple_nearly_adjacent_segments(segment_list: List[LineString], tolerance: float = 200., densify: Union[float, None] = 1.e3):
+def merge_multiple_nearly_adjacent_segments(
+    segment_list: List[LineString],
+    tolerance: float = 200.0,
+    densify: Union[float, None] = 1.0e3,
+):
     """Merge multiple line segments that are nearly adjacent to each other.
     This function takes a list of LineString objects and merges them into a single LineString
     if they are within the specified tolerance distance of each other. If there are only
@@ -107,18 +121,23 @@ def merge_multiple_nearly_adjacent_segments(segment_list: List[LineString], tole
     :param tolerance: Maximum distance between segments to be considered for merging, defaults to 200.0
     :param densify: Distance between points when densifying the lines, set to None to skip densification, defaults to 1.0e3
     :return: A merged LineString containing all input segments
-    :rtype: LineString                                  
+    :rtype: LineString
     """
     assert len(segment_list) >= 2
     if len(segment_list) == 2:
-        return merge_two_nearly_adjacent_segments(segment_list, tolerance, densify=densify)
+        return merge_two_nearly_adjacent_segments(
+            segment_list, tolerance, densify=densify
+        )
     else:
 
         return sorted_merge(segment_list, tolerance, densify=densify)
 
-def sorted_merge(seg_list: List[LineString], tolerance: float = 200., densify: float = 1.e3):
+
+def sorted_merge(
+    seg_list: List[LineString], tolerance: float = 200.0, densify: float = 1.0e3
+):
     """Merges a list of LineString segments into a single LineString by iteratively combining the nearest segments.
-    This function starts with the southernmost segment (minimum y-coordinate of centroid) and 
+    This function starts with the southernmost segment (minimum y-coordinate of centroid) and
     repeatedly merges it with the nearest remaining segment until all segments are included.
     :param seg_list: List of LineString segments to be merged
     :param tolerance: Maximum distance allowed between segments for merging, defaults to 200.
@@ -126,13 +145,16 @@ def sorted_merge(seg_list: List[LineString], tolerance: float = 200., densify: f
     :return: A single LineString representing the merged segments
     :rtype: LineString
     """
-    sorted_list = [min(seg_list, key=lambda x:x.centroid.y)]
+    sorted_list = [min(seg_list, key=lambda x: x.centroid.y)]
     combined_segment = sorted_list[0]
     while len(sorted_list) < len(seg_list):
         remaining_list = [seg for seg in seg_list if seg not in sorted_list]
-        nearest_remaining = sorted(remaining_list, key=lambda x: x.distance(combined_segment))[0]
-        combined_segment = merge_two_nearly_adjacent_segments([combined_segment, nearest_remaining],
-                                                              tolerance=tolerance, densify=densify)
+        nearest_remaining = sorted(
+            remaining_list, key=lambda x: x.distance(combined_segment)
+        )[0]
+        combined_segment = merge_two_nearly_adjacent_segments(
+            [combined_segment, nearest_remaining], tolerance=tolerance, densify=densify
+        )
         sorted_list.append(nearest_remaining)
 
     return combined_segment

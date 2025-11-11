@@ -1,11 +1,12 @@
 """
 Currently not used, might be better to use splines now those are integrated
 """
-import numpy as np
+
 from typing import List
+
+import numpy as np
 from shapely.geometry import LineString, Point
 from shapely.ops import linemerge
-
 
 
 def chaikins_corner_cutting(coords, refinements=5):
@@ -26,6 +27,7 @@ def chaikins_corner_cutting(coords, refinements=5):
 
     return coords
 
+
 def smooth_trace(trace: LineString, n_refinements: int = 5):
     assert isinstance(trace, LineString)
     coords = np.array(trace.coords)
@@ -33,8 +35,12 @@ def smooth_trace(trace: LineString, n_refinements: int = 5):
 
 
 def straighten(line: LineString, strike: float, damping: float):
-    strike_vector = np.array([np.sin(np.radians(strike)), np.cos(np.radians(strike)), 0.])
-    across_strike = np.array([np.sin(np.radians(strike + 90.)), np.cos(np.radians(strike + 90.)), 0.])
+    strike_vector = np.array(
+        [np.sin(np.radians(strike)), np.cos(np.radians(strike)), 0.0]
+    )
+    across_strike = np.array(
+        [np.sin(np.radians(strike + 90.0)), np.cos(np.radians(strike + 90.0)), 0.0]
+    )
     line_array = np.array(line.coords)
     centroid = np.array(line.centroid)
 
@@ -44,10 +50,3 @@ def straighten(line: LineString, strike: float, damping: float):
     new_locations = centroid + along_dists + damping * across_dists
 
     return LineString(new_locations)
-
-
-
-
-
-
-
