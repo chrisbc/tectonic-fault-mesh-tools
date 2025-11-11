@@ -1,0 +1,6 @@
+.coverage
+.python-version
+.safety-project.ini
+audit.txt
+coverage.xml
+dist/
