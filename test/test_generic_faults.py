@@ -6,8 +6,12 @@ import geopandas as gpd
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
-from fault_mesh.faults.generic import (GenericFault, GenericMultiFault,
-                                       expected_fields, required_fields)
+from fault_mesh.faults.generic import (
+    GenericFault,
+    GenericMultiFault,
+    expected_fields,
+    required_fields,
+)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 

@@ -4,3 +4,4 @@
 audit.txt
 coverage.xml
 dist/
+__pycache__

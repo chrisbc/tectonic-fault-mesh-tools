@@ -1,13 +1,16 @@
 from unittest import TestCase
 
-import geopandas as gpd
-import numpy as np
+# import geopandas as gpd
+# import numpy as np
 from shapely.geometry import LineString
 
 from fault_mesh.utilities.merging import (
-    align_two_nearly_adjacent_segments, densify_line,
+    align_two_nearly_adjacent_segments,
+    densify_line,
     merge_multiple_nearly_adjacent_segments,
-    merge_two_nearly_adjacent_segments, sorted_merge)
+    merge_two_nearly_adjacent_segments,
+    sorted_merge,
+)
 
 
 class test_merging(TestCase):

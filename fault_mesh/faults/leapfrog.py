@@ -16,17 +16,19 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 from shapely.affinity import translate
-from shapely.geometry import (LineString, MultiLineString, MultiPoint, Point,
-                              Polygon)
+from shapely.geometry import LineString, MultiLineString, MultiPoint, Point, Polygon
 from shapely.ops import unary_union
 
 from fault_mesh.faults.connected import ConnectedFaultSystem
-from fault_mesh.faults.generic import (GenericFault, GenericMultiFault,
-                                       calculate_strike_direction,
-                                       normalize_bearing, smallest_difference)
+from fault_mesh.faults.generic import (
+    GenericFault,
+    GenericMultiFault,
+    calculate_strike_direction,
+    normalize_bearing,
+    smallest_difference,
+)
 from fault_mesh.faults.mesh import FaultMesh
-from fault_mesh.utilities.cutting import (cut_line_at_point,
-                                          cut_line_between_two_points)
+from fault_mesh.utilities.cutting import cut_line_at_point, cut_line_between_two_points
 from fault_mesh.utilities.graph import connected_nodes, suggest_combined_name
 from fault_mesh.utilities.meshing import triangulate_contours
 from fault_mesh.utilities.opensha import fault_polygon_xml, fault_trace_xml

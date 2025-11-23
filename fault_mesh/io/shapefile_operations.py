@@ -3,8 +3,14 @@ from typing import Union
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import (LineString, MultiLineString, MultiPoint,
-                              MultiPolygon, Point, Polygon)
+from shapely.geometry import (
+    LineString,
+    MultiLineString,
+    MultiPoint,
+    MultiPolygon,
+    Point,
+    Polygon,
+)
 
 
 def geopandas_polygon_to_gmt(
