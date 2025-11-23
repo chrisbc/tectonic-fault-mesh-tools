@@ -15,30 +15,35 @@ from scipy.interpolate import RBFInterpolator
 from shapely import get_point
 from shapely.affinity import translate
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
-from shapely.ops import linemerge, unary_union
+from shapely.ops import unary_union
 
-from fault_mesh.faults.generic import (calculate_dip_direction,
-                                       dip_direction_ranges, reverse_bearing,
-                                       reverse_line, smallest_difference)
+from fault_mesh.faults.generic import (
+    calculate_dip_direction,
+    dip_direction_ranges,
+    reverse_bearing,
+    reverse_line,
+    smallest_difference,
+)
 from fault_mesh.faults.mesh import FaultMesh
-from fault_mesh.utilities.cutting import (cut_line_at_multiple_points,
-                                          cut_line_at_point)
+from fault_mesh.utilities.cutting import cut_line_at_multiple_points, cut_line_at_point
 from fault_mesh.utilities.merging import (
     align_two_nearly_adjacent_segments,
-    merge_multiple_nearly_adjacent_segments)
-from fault_mesh.utilities.meshing import (fit_plane_to_points,
-                                          get_strike_dip_from_normal,
-                                          most_common_or_first,
-                                          triangulate_contours,
-                                          weighted_circular_mean)
+    merge_multiple_nearly_adjacent_segments,
+)
+from fault_mesh.utilities.meshing import (
+    fit_plane_to_points,
+    get_strike_dip_from_normal,
+    most_common_or_first,
+    triangulate_contours,
+    weighted_circular_mean,
+)
 from fault_mesh.utilities.smoothing import smooth_trace
-from fault_mesh.utilities.splines import spline_fit_contours
 
 
 class ConnectedFaultSystem:
     """_summary_"""
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         overall_name: str,
         cfm_faults,
@@ -804,12 +809,6 @@ class ConnectedFaultSystem:
         spline_contour_list = [
             np.array(contour.coords) for contour in spline_contours.geometry.values
         ]
-
-        spline_contour_points = np.vstack(spline_contour_list)
-        spline_contour_dict = {
-            tuple(point): i for (i, point) in enumerate(spline_contour_points)
-        }
-
         spline_contour_boundary = np.vstack(
             [
                 spline_contour_list[0],

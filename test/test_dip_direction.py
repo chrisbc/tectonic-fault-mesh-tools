@@ -3,10 +3,15 @@ from unittest import TestCase
 import numpy as np
 from shapely.geometry import LineString
 
-from fault_mesh.faults.generic import (bearing_geq, bearing_leq,
-                                       calculate_dip_direction,
-                                       normalize_bearing, reverse_bearing,
-                                       reverse_line, smallest_difference)
+from fault_mesh.faults.generic import (
+    bearing_geq,
+    bearing_leq,
+    calculate_dip_direction,
+    normalize_bearing,
+    reverse_bearing,
+    reverse_line,
+    smallest_difference,
+)
 
 
 class test_bearing_functions(TestCase):

@@ -8,8 +8,7 @@ from numba import njit
 from scipy.spatial import ConvexHull, KDTree
 from shapely.geometry import box
 
-from fault_mesh.utilities.meshing import (fit_plane_to_points,
-                                          get_strike_dip_from_normal)
+from fault_mesh.utilities.meshing import fit_plane_to_points, get_strike_dip_from_normal
 
 
 @njit
